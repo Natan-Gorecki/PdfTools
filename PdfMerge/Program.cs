@@ -66,7 +66,7 @@ static string GetPath(string path)
 {
     if (Path.IsPathRooted(path) == false)
     {
-        return Path.Combine(AppDomain.CurrentDomain.BaseDirectory, path);
+        return Path.Combine(Environment.CurrentDirectory, path);
     }
     return path;
 }
