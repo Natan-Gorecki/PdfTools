@@ -1,10 +1,10 @@
 ﻿using PdfSharp.Pdf;
 using PdfSharp.Pdf.IO;
-using System.Reflection.PortableExecutable;
+using SharedTools;
 
 System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
 
-string usageString = @"Usage: FileMerge -o OutputFile.pdf File1.pdf File2.pdf ...
+string usageString = @"Usage: PdfMerge -o OutputFile.pdf File1.pdf File2.pdf ...
 Options: 
     --output, -o: Specify output file, this flag is mandatory";
 
@@ -14,78 +14,59 @@ if (args == null || args.Length == 0)
     return;
 }
 
-int oIndex = Array.IndexOf(args, "-o");
-int outputIndex = Array.IndexOf(args, "--output");
-if (oIndex.IndexFound() && outputIndex.IndexFound())
+try
 {
-    Console.WriteLine("Error: Duplicated output arguments");
+    CommandLineParser commandLine = new CommandLineParser();
+    commandLine.Parse(args);
+
+    string outputOption = commandLine.GetOption("--output", "-o");
+    string outputFile = GetPath(outputOption);
+
+    if (Path.GetExtension(outputFile) != ".pdf")
+    {
+        throw new Exception($"Output file {outputFile} must end with .pdf extension");
+    }
+
+    PdfDocument outputDocument = new PdfDocument();
+    IEnumerable<string> inputFiles = commandLine.OtherArgs;
+
+    foreach(string inputFile in inputFiles)
+    {
+        string path = GetPath(inputFile);
+        
+        if (!File.Exists(path))
+        {
+            throw new Exception($"Invalid file {path}");
+        }
+        
+        if (Path.GetExtension(path) != ".pdf")
+        {
+            throw new Exception($"Input file {path} doesn't end with .pdf extension");
+        }
+
+        PdfDocument inputDocument = PdfReader.Open(path, PdfDocumentOpenMode.Import);
+        for (int i = 0; i < inputDocument.PageCount; i++)
+        {
+            PdfPage page = inputDocument.Pages[i];
+            outputDocument.AddPage(page);
+        }
+    }
+
+    outputDocument.Save(outputFile);
+    Console.WriteLine($"Merged {inputFiles.Count()} files as {outputFile}.");
+    return;
+}
+catch(Exception ex)
+{
+    Console.WriteLine($"Error: {ex.Message}");
     return;
 }
 
-int index = oIndex.IndexFound() ? oIndex : outputIndex;
-string outputFile = GetPath(args[index + 1]);
-
-if (Path.GetExtension(outputFile) != ".pdf")
-{
-    Console.WriteLine($"Error: Output file {outputFile} must end with .pdf extension");
-}
-
-var inputFiles = new List<string>();
-for (int i = 0; i < args.Length; i++)
-{
-    string arg = args[i];
-
-    // skip flags
-    if (arg.StartsWith("-"))
-    {
-        i++;
-        continue;
-    }
-
-    string path = GetPath(arg);
-    if (File.Exists(path) == false)
-    {
-        Console.WriteLine($"Error: Invalid file {path}");
-        return;
-    }
-    if (Path.GetExtension(path) != ".pdf")
-    {
-        Console.WriteLine($"Error: Input file {path} doesn't end with .pdf extension");
-    }
-
-    inputFiles.Add(path);
-}
-
-PdfDocument outputDocument = new PdfDocument();
-
-foreach (string file in inputFiles)
-{
-    PdfDocument inputDocument = PdfReader.Open(file, PdfDocumentOpenMode.Import);
-
-    for (int i = 0; i < inputDocument.PageCount; i++)
-    {
-        PdfPage page = inputDocument.Pages[i];
-        outputDocument.AddPage(page);
-    }
-}
-
-outputDocument.Save(outputFile);
-Console.WriteLine($"Merged {inputFiles.Count} files as {outputFile}.");
-return;
-
-string GetPath(string path)
+static string GetPath(string path)
 {
     if (Path.IsPathRooted(path) == false)
     {
         return Path.Combine(AppDomain.CurrentDomain.BaseDirectory, path);
     }
     return path;
-}
-
-public static class Extensions
-{
-    public static bool IndexFound(this int index)
-    {
-        return index != -1;
-    }
 }
